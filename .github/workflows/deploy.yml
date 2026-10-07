@@ -24,6 +24,11 @@ jobs:
       - name: جلب المستودع
         uses: actions/checkout@v4
 
+      - name: تفعيل وتهيئة Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
       - name: تهيئة بايثون
         uses: actions/setup-python@v5
         with:
