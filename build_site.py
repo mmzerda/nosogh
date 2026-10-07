@@ -164,8 +164,9 @@ def load_lang(lang):
     """يحمّل كل أقسام لغة ما: قائمة سجلات مع نوع القسم."""
     recs = []
     for sec in SECTIONS:
-        for fn in (lang == "ar" and sec == "article" and [BASE / "data" / "articles.jsonl"] or []) + \
-                  [BASE / ("data-%s-%s" % (lang, sec)) / ("%ss.jsonl" % sec)]:
+        # العربية: اقرأ كل ملفّات data/ (يدعم التقسيم إلى شظايا أصغر من حدّ GitHub)
+        ar_shards = sorted((BASE / "data").glob("*.jsonl")) if (lang == "ar" and sec == "article") else []
+        for fn in ar_shards + [BASE / ("data-%s-%s" % (lang, sec)) / ("%ss.jsonl" % sec)]:
             if not fn.exists():
                 continue
             for line in open(fn, encoding="utf-8"):
