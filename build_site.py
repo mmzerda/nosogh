@@ -216,6 +216,7 @@ def page(lang, title, body_html, depth=1, extra_head=""):
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>{title} — {site}</title>
 <style>
 :root{{--bg:#fbfaf7;--fg:#1f1b16;--mut:#6b6358;--line:#e7e1d6;--accent:#7a5c2e;--card:#fff}}
@@ -443,6 +444,7 @@ def write_author(lang, asl, items):
         '<!doctype html><html lang="%s" dir="rtl"><head>' % esc(lang)
         + '<meta charset="utf-8">'
         + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        + '<meta name="robots" content="noindex, nofollow">'
         + '<title>%s — %s</title>' % (esc(name), esc(SITE_NAME))
         + AUTHOR_FONTS
         + '<style>' + AUTHOR_CSS + '</style></head><body>'
