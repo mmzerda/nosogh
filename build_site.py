@@ -21,7 +21,7 @@ import html
 import json
 import re
 import shutil
-from collections import defaultdict
+from collections import Counter, OrderedDict, defaultdict
 from pathlib import Path
 
 # ------------------------------------------------------------ إعدادات
@@ -46,6 +46,125 @@ GENERIC_TAGS = {
     "fatwas", "chants islamiques", "ouvrages", "flash", "sunna", "koran",
     "إسلام", "سنة", "قرآن", "دروس", "خطب", "محاضرات", "فتاوى", "أناشيد", "كتب", "فلاشات",
 }
+
+# تجميع التصنيفات الفوضوية في مجموعات نظيفة (يُطابَق بالاحتواء)
+GROUPS = OrderedDict([
+    ("مع القرآن وتدبّره", ["مع القرآن", "ليدبروا", "تدبر", "أمثال قرآنية", "إعجاز القرآن",
+                            "مقاصد السور", "خواطر حول آيات", "1000 سؤال", "في القرآن"]),
+    ("السيرة والشمائل", ["مع الحبيب", "السيرة", "دلائل النبوة", "الشمائل", "الصفات المحمدية",
+                          "بيعة العقبة", "الهجرة", "ولادة خير", "وِلادةُ", "حدث في السنة",
+                          "مدرسة الهجرة", "من بيعة العقبة"]),
+    ("الصحابة والأعلام", ["مع الصديق", "مع الفاروق", "مع عثمان", "مع علي", "عمر بن الخطاب",
+                           "مع الصحابة", "صحابيات", "صحابة", "تراجم الصحابة", "خلافة أبي بكر",
+                           "مع الأنبياء", "إبراهيم", "سليمان", "عظماء أمة الإسلام", "الموسوعة التاريخية"]),
+    ("رقائق وطبّ القلوب", ["خواطر", "طب القلوب", "القلب", "دواء القلوب", "القناعة", "الإحسان",
+                            "من أخطائنا", "طب"]),
+    ("سلاسل علمية", ["زاد المعاد", "الأحكام السلطانية", "دورة علمية", "دليل المسلم",
+                      "أحكام الطهارة", "طريقة أهل الكفر"]),
+    ("مواسم وخطب", ["رمضان", "عيد", "خطب", "ابدأ في رمضان", "مقاطع دعوية"]),
+])
+IGNORE_CATS = {"المقالات", ""}
+
+# تعريف الكتّاب المعروفين (يُوسَّع لاحقًا)
+BIO = {
+    "أبو الهيثم محمد درويش": {
+        "role": "كاتب وداعية · مسؤول قسم المقالات بطريق الإسلام",
+        "bio": ("دكتوراه المناهج وطرق التدريس، تخصص تكنولوجيا التعليم، من كلية التربية بجامعة طنطا. "
+                "كبير معلمين بالمرحلة الثانوية، ومدرّب استراتيجيات التعلّم، بالقناطر الخيرية "
+                "(وزارة التربية والتعليم المصرية). من أغزر كتّاب طريق الإسلام، له سلاسل في تدبّر "
+                "القرآن والسيرة والرقائق. محفوظ إرثه هنا بإذنه ونسبته إليه."),
+        "initial": "هـ",
+    },
+}
+
+
+def norm(s):
+    return re.sub(r"\s+", " ", (s or "")).strip()
+
+
+def group_of(cats):
+    for cat in cats:
+        c = norm(cat)
+        if c in IGNORE_CATS:
+            continue
+        for gname, keys in GROUPS.items():
+            if any(k in c for k in keys):
+                return gname
+    return "مقالات أخرى"
+
+
+def canonical_slug(name, items):
+    """سلگ موحّد للكاتب: أشهر معرّف scholar إن وُجد، وإلا بصمة الاسم."""
+    ids = []
+    for r in items:
+        u = r.get("author_url") or ""
+        m = re.search(r"/scholar/(\d+)", u)
+        if m:
+            ids.append(m.group(1))
+    if ids:
+        return "s" + Counter(ids).most_common(1)[0][0]
+    return "n" + hashlib.md5(name.encode("utf-8")).hexdigest()[:10]
+
+
+# أنماط صفحة الكاتب الأنيقة (نُسُغ)
+AUTHOR_CSS = """
+:root{--bg:#f6f3ec;--surface:#fffdf8;--ink:#241f17;--muted:#6f6656;--line:#e4ddcf;--accent:#7a5a2b;--accent-soft:#c9a86318;--gold:#9a7636;
+ --disp:"Amiri",Georgia,serif;--body:"Noto Naskh Arabic","Amiri",Georgia,serif;--ui:"Cairo",system-ui,sans-serif;}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17140e;--surface:#201c14;--ink:#ece5d7;--muted:#9c917c;--line:#2e2819;--accent:#c9a863;--accent-soft:#c9a86320;--gold:#d9b872;color-scheme:dark;}}
+:root[data-theme="dark"]{--bg:#17140e;--surface:#201c14;--ink:#ece5d7;--muted:#9c917c;--line:#2e2819;--accent:#c9a863;--accent-soft:#c9a86320;--gold:#d9b872;color-scheme:dark;}
+*{box-sizing:border-box}html{direction:rtl}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.9;direction:rtl;overflow-x:hidden}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.wrap{max-width:880px;margin:0 auto;padding-inline:20px}
+header{border-bottom:1px solid var(--line);background:var(--surface)}
+.bar{display:flex;align-items:center;justify-content:space-between;padding-block:14px;font-family:var(--ui)}
+.brand{font-family:var(--disp);font-size:1.5rem;font-weight:700;color:var(--ink)}.brand span{color:var(--gold)}
+.tgl{font-family:var(--ui);font-size:.8rem;cursor:pointer;background:transparent;color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:5px 11px}
+.hero{background:var(--surface);border-bottom:1px solid var(--line);padding-block:38px}
+.hero .wrap{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.ava{width:92px;height:92px;border-radius:50%;flex-shrink:0;background:linear-gradient(135deg,var(--accent),var(--gold));display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-size:2.6rem;color:#fff}
+.hinfo{flex:1;min-width:240px}.hinfo h1{font-family:var(--disp);font-size:2.1rem;margin:0 0 4px}
+.role{font-family:var(--ui);font-size:.9rem;color:var(--gold);margin-bottom:10px}
+.biop{font-size:1.06rem;color:var(--muted);max-width:62ch}
+.stats{display:flex;gap:26px;margin-top:16px;font-family:var(--ui)}
+.stats b{display:block;font-size:1.5rem;color:var(--accent);font-family:var(--disp);line-height:1}
+.stats span{font-size:.76rem;color:var(--muted)}
+main{padding-block:26px 70px}
+input#q{width:100%;padding:12px 14px;font-size:1rem;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font-family:var(--body);margin-bottom:18px}
+.grp{border:1px solid var(--line);border-radius:12px;margin-bottom:12px;background:var(--surface);overflow:hidden}
+.grp>summary{cursor:pointer;padding:14px 18px;font-family:var(--ui);font-weight:600;display:flex;justify-content:space-between;align-items:center;list-style:none}
+.grp>summary::-webkit-details-marker{display:none}
+.grp>summary .n{font-size:.8rem;color:var(--gold);font-weight:400}
+.grp[open]>summary{border-bottom:1px solid var(--line)}
+.grp ul{margin:0;padding:6px 0;list-style:none}
+.grp li{padding:0}.grp li a{display:block;padding:9px 18px;font-size:1.05rem;color:var(--ink)}
+.grp li a:hover{background:var(--accent-soft);text-decoration:none;color:var(--accent)}
+#results{margin-top:4px}
+.rcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-bottom:8px}
+.rcard a{font-family:var(--disp);font-size:1.15rem}.rcard .g{font-family:var(--ui);font-size:.72rem;color:var(--gold)}.rcard p{margin:4px 0 0;font-size:.92rem;color:var(--muted)}
+.cnt{font-family:var(--ui);font-size:.85rem;color:var(--muted);margin-bottom:12px}
+.back{font-family:var(--ui);font-size:.85rem;color:var(--muted)}
+footer{border-top:1px solid var(--line);color:var(--muted);font-size:.84rem;font-family:var(--ui);padding-block:20px}
+"""
+
+AUTHOR_FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com">'
+                '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+                '<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700'
+                '&family=Cairo:wght@400;600;700&family=Noto+Naskh+Arabic:wght@400;500;700'
+                '&display=swap" rel="stylesheet">')
+
+AUTHOR_JS = (
+    "var q=document.getElementById('q'),res=document.getElementById('results'),"
+    "grp=document.getElementById('groups'),cnt=document.getElementById('cnt'),N=ALL.length;"
+    "q.addEventListener('input',function(){"
+    "var v=q.value.trim();"
+    "if(!v){res.hidden=true;grp.hidden=false;cnt.textContent=N+' مقالة';return;}"
+    "grp.hidden=true;res.hidden=false;"
+    "var r=ALL.filter(function(a){return (a.t+' '+a.s).indexOf(v)>-1;});"
+    "cnt.textContent=r.length+' نتيجة';"
+    "res.innerHTML=r.slice(0,300).map(function(a){return '<div class=\\\"rcard\\\"><div class=\\\"g\\\">'+a.g+'</div><a href=\\\"'+a.u+'\\\">'+a.t+'</a>'+(a.s?'<p>'+a.s+'…</p>':'')+'</div>';}).join('');"
+    "});"
+)
 
 
 def esc(s):
@@ -201,11 +320,20 @@ def build_lang(lang):
     (d / "a").mkdir(parents=True, exist_ok=True)
     (d / "author").mkdir(parents=True, exist_ok=True)
 
+    # سلگ موحّد لكل كاتب حسب اسمه (يدمج معرّفات scholar المتعددة لنفس الشخص)
+    by_name = defaultdict(list)
+    for r in recs:
+        nm = norm(r.get("author"))
+        if nm:
+            by_name[nm].append(r)
+    name_slug = {nm: canonical_slug(nm, its) for nm, its in by_name.items()}
+
     authors = defaultdict(list)
     index = []
     for r in recs:
         aid, sec = r.get("id"), r["_sec"]
-        asl = slug_author(r)
+        nm = norm(r.get("author"))
+        asl = name_slug.get(nm) if nm else None
         if asl:
             authors[asl].append(r)
         # صفحة المادة
@@ -276,15 +404,72 @@ def write_article(lang, r, asl):
 
 
 def write_author(lang, asl, items):
+    """صفحة كاتب أنيقة: ترويسة تعريف، تصنيفات قابلة للطيّ، وبحث — بروابط للنصوص."""
     name = items[0].get("author") or "—"
-    rows = "".join(
-        '<div class="card"><h3><a href="../a/%s-%d.html">%s</a></h3><p>%s…</p></div>' % (
-            r["_sec"], r.get("id"), esc(r.get("title") or ""), esc(r["_body"][:140]))
-        for r in items)
-    body = '<h1>%s</h1><div class="count">%d %s</div>%s' % (
-        esc(name), len(items), "مادة", rows)
-    (OUT / lang / "author" / ("%s.html" % asl)).write_text(
-        page(lang, name, body, depth=2), encoding="utf-8")
+    info = BIO.get(norm(name), {"role": "كاتب", "bio": "", "initial": (name or "؟")[:1]})
+    arts = []
+    for r in items:
+        arts.append({
+            "id": r.get("id"), "sec": r["_sec"],
+            "t": norm(r.get("title")) or "(بلا عنوان)",
+            "g": group_of(r.get("categories") or []),
+            "s": re.sub(r"\s+", " ", (r.get("_body") or ""))[:160],
+        })
+    by = defaultdict(list)
+    for a in arts:
+        by[a["g"]].append(a)
+    order = list(GROUPS.keys()) + ["مقالات أخرى"]
+    groups_html = ""
+    ng = 0
+    for g in order:
+        its = by.get(g)
+        if not its:
+            continue
+        ng += 1
+        its.sort(key=lambda x: x["t"])
+        lis = "".join(
+            '<li><a href="../a/%s-%s.html" title="%s">%s</a></li>' % (
+                i["sec"], i["id"], esc(i["s"]), esc(i["t"])) for i in its)
+        groups_html += ('<details class="grp"%s><summary><span>%s</span>'
+                        '<span class="n">%d مقالة</span></summary><ul>%s</ul></details>') % (
+            ' open' if ng == 1 else '', esc(g), len(its), lis)
+    data = json.dumps(
+        [{"t": a["t"], "g": a["g"], "s": a["s"],
+          "u": "../a/%s-%s.html" % (a["sec"], a["id"])} for a in arts],
+        ensure_ascii=False)
+    toggle = ("var r=document.documentElement;"
+              "r.setAttribute('data-theme',r.getAttribute('data-theme')==='dark'?'light':'dark')")
+    doc = (
+        '<!doctype html><html lang="%s" dir="rtl"><head>' % esc(lang)
+        + '<meta charset="utf-8">'
+        + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        + '<title>%s — %s</title>' % (esc(name), esc(SITE_NAME))
+        + AUTHOR_FONTS
+        + '<style>' + AUTHOR_CSS + '</style></head><body>'
+        + '<header><div class="wrap bar">'
+        + '<a class="brand" href="../../index.html">نُسُغ<span>.</span></a>'
+        + '<button class="tgl" onclick="' + toggle + '">ليل / نهار</button>'
+        + '</div></header>'
+        + '<section class="hero"><div class="wrap">'
+        + '<div class="ava">%s</div>' % esc(info["initial"])
+        + '<div class="hinfo"><h1>%s</h1>' % esc(name)
+        + '<div class="role">%s</div>' % esc(info["role"])
+        + ('<p class="biop">%s</p>' % esc(info["bio"]) if info["bio"] else "")
+        + '<div class="stats"><div><b>%d</b><span>مقالة محفوظة</span></div>' % len(arts)
+        + '<div><b>%d</b><span>سلسلة وموضوعًا</span></div></div>' % ng
+        + '</div></div></section>'
+        + '<main><div class="wrap">'
+        + '<div class="back"><a href="index.html">← كل الكتّاب</a></div>'
+        + '<input id="q" type="search" placeholder="%s">' % esc("ابحث في مقالات " + name + "…")
+        + '<div class="cnt" id="cnt">%d مقالة في %d مجموعة</div>' % (len(arts), ng)
+        + '<div id="results" hidden></div>'
+        + '<div id="groups">' + groups_html + '</div>'
+        + '</div></main>'
+        + '<footer><div class="wrap">نُسُغ · كنز أبي الهيثم — النصوص محفوظة من طريق الإسلام، وتُعرض بإذن الكاتب، والحقوق له.</div></footer>'
+        + '<script>var ALL=' + data + ';' + AUTHOR_JS + '</script>'
+        + '</body></html>'
+    )
+    (OUT / lang / "author" / ("%s.html" % asl)).write_text(doc, encoding="utf-8")
 
 
 def write_lang_home(lang, recs, authors):
